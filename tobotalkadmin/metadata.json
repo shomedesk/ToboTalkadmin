@@ -1,0 +1,5 @@
+{
+  "name": "ToboTalk Admin",
+  "description": "A complete admin panel for managing ToboTalk videos and settings with Cloudflare R2 integration.",
+  "requestFramePermissions": []
+}
