@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // ১. হেল্পার ফাংশন (সিকিউরিটির জন্য)
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // অ্যাডমিন চেক (আপনার ইমেইল এবং ডাটাবেস ফিল্ড অনুযায়ী)
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "shomedesk@gmail.com" || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('is_admin', false) == true ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin')));
+    }
+
+    // ম্যানেজার চেক (যাতে তারা ভিডিও ম্যানেজ করতে পারে)
+    function isManager() {
+      return isAuthenticated() && 
+        (isAdmin() || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'manager'));
+    }
+
+    // ===============================================================
+    // ২. কালেকশন রুলস
+    // ===============================================================
+
+    // ৩.১. Admin Config (নতুন কালেকশন - সবার জন্য রিড অ্যালাউড)
+    match /admin_config/{document=**} {
+      allow read: if true; 
+      allow write: if isAdmin();
+    }
+
+    // ১. Shorts Videos
+    match /shorts_videos/{document} {
+      allow read: if true; 
+      allow create, update: if isAdmin() || isManager();
+      allow delete: if isAdmin();
+    }
+
+    // ২. Kids YouTube Videos
+    match /kids_youtube_videos/{document} {
+      allow read: if true;
+      allow create, update: if isAdmin() || isManager();
+      allow delete: if isAdmin();
+    }
+
+    // ৩. App Settings (শুধু অ্যাডমিন)
+    match /app_settings/{document} {
+      allow read: if true; 
+      allow write: if isAdmin();
+    }
+
+    // ৪. Subscription Offers (শুধু অ্যাডমিন)
+    match /subscription_offers/{offerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ৫. Users
+    match /users/{document} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == document;
+      allow update: if isAuthenticated() && (request.auth.uid == document || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ৬. Video Comments
+    match /video_comments/{document} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // ৭. Activity Logs (শুধু অ্যাডমিন)
+    match /activity_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // ৩. স্পেশাল রুলস (FlutterFlow এবং ডিফল্ট)
+    // ===============================================================
+
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.token.email.matches("firebase@flutterflow.io");
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
